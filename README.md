@@ -1,6 +1,7 @@
-# PatchCore_transistor
+# PatchCore_light
 
-The following codes are the solutions **(1st place, private score: 1)** for the dacon competition.
+Easy implementation of PatchCore.
+Feature alignment scheme modified for efficiency.
 
 ## Usage
 * Run run.ipynb

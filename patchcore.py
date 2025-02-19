@@ -144,64 +144,66 @@ class PatchCore(torch.nn.Module):
             return _detach(features), patch_shapes
         return _detach(features)
 
-    # def _embed(self, images, detach=True, provide_patch_shapes=False):
-    #     """Returns feature embeddings for images."""
-    #     def _detach(features):
-    #         if detach:
-    #             return [x.detach().cpu().numpy() for x in features]
-    #         return features
 
-    #     _ = self.forward_modules["feature_aggregator"].eval()
-    #     with torch.no_grad():
-    #         features = self.forward_modules["feature_aggregator"](images)
 
-    #     features = [features[layer] for layer in self.layers_to_extract_from]
+    def _embed(self, images, detach=True, provide_patch_shapes=False):
+        """Returns feature embeddings for images."""
+        def _detach(features):
+            if detach:
+                return [x.detach().cpu().numpy() for x in features]
+            return features
 
-    #     # 패치화: 각 레이어의 feature map을 패치 단위로 분리하고 공간 정보를 함께 추출
-    #     features = [self.patch_maker.patchify(x, return_spatial_info=True) for x in features]
-    #     patch_shapes = [x[1] for x in features]
-    #     features = [x[0] for x in features]
+        _ = self.forward_modules["feature_aggregator"].eval()
+        with torch.no_grad():
+            features = self.forward_modules["feature_aggregator"](images)
 
-    #     # 기준 패치 크기를 마지막 레이어의 패치 크기로 설정
-    #     ref_num_patches = patch_shapes[-1]
-    #     # 마지막 레이어는 이미 기준 크기이므로, 나머지 레이어들만 다운샘플링 진행
-    #     for i in range(len(features) - 1):
-    #         _features = features[i]
-    #         patch_dims = patch_shapes[i]
+        features = [features[layer] for layer in self.layers_to_extract_from]
 
-    #         # 현재 feature map을 공간 정보(패치 행렬)로 reshape
-    #         _features = _features.reshape(
-    #             _features.shape[0], patch_dims[0], patch_dims[1], *_features.shape[2:]
-    #         )
-    #         # interpolate를 위해 spatial 차원을 뒤로 옮김
-    #         _features = _features.permute(0, -3, -2, -1, 1, 2)
-    #         perm_base_shape = _features.shape
-    #         _features = _features.reshape(-1, *_features.shape[-2:])
-    #         # 마지막 레이어의 패치 크기에 맞춰 다운샘플링
-    #         _features = F.interpolate(
-    #             _features.unsqueeze(1),
-    #             size=(ref_num_patches[0], ref_num_patches[1]),
-    #             mode="bilinear",
-    #             align_corners=False,
-    #         )
-    #         _features = _features.squeeze(1)
-    #         _features = _features.reshape(
-    #             *perm_base_shape[:-2], ref_num_patches[0], ref_num_patches[1]
-    #         )
-    #         _features = _features.permute(0, -2, -1, 1, 2, 3)
-    #         _features = _features.reshape(len(_features), -1, *_features.shape[-3:])
-    #         features[i] = _features
+        # 패치화: 각 레이어의 feature map을 패치 단위로 분리하고 공간 정보를 함께 추출
+        features = [self.patch_maker.patchify(x, return_spatial_info=True) for x in features]
+        patch_shapes = [x[1] for x in features]
+        features = [x[0] for x in features]
 
-    #     # 각 레이어의 feature들을 2D 형태로 펼침 (flatten)
-    #     features = [x.reshape(-1, *x.shape[-3:]) for x in features]
+        # 기준 패치 크기를 마지막 레이어의 패치 크기로 설정
+        ref_num_patches = patch_shapes[-1]
+        # 마지막 레이어는 이미 기준 크기이므로, 나머지 레이어들만 다운샘플링 진행
+        for i in range(len(features) - 1):
+            _features = features[i]
+            patch_dims = patch_shapes[i]
 
-    #     # 전처리 및 차원 축소 과정을 거쳐 최종 임베딩 생성
-    #     features = self.forward_modules["preprocessing"](features)
-    #     features = self.forward_modules["preadapt_aggregator"](features)
+            # 현재 feature map을 공간 정보(패치 행렬)로 reshape
+            _features = _features.reshape(
+                _features.shape[0], patch_dims[0], patch_dims[1], *_features.shape[2:]
+            )
+            # interpolate를 위해 spatial 차원을 뒤로 옮김
+            _features = _features.permute(0, -3, -2, -1, 1, 2)
+            perm_base_shape = _features.shape
+            _features = _features.reshape(-1, *_features.shape[-2:])
+            # 마지막 레이어의 패치 크기에 맞춰 다운샘플링
+            _features = F.interpolate(
+                _features.unsqueeze(1),
+                size=(ref_num_patches[0], ref_num_patches[1]),
+                mode="bilinear",
+                align_corners=False,
+            )
+            _features = _features.squeeze(1)
+            _features = _features.reshape(
+                *perm_base_shape[:-2], ref_num_patches[0], ref_num_patches[1]
+            )
+            _features = _features.permute(0, -2, -1, 1, 2, 3)
+            _features = _features.reshape(len(_features), -1, *_features.shape[-3:])
+            features[i] = _features
 
-    #     if provide_patch_shapes:
-    #         return _detach(features), patch_shapes
-    #     return _detach(features)
+        # 각 레이어의 feature들을 2D 형태로 펼침 (flatten)
+        features = [x.reshape(-1, *x.shape[-3:]) for x in features]
+
+        # 전처리 및 차원 축소 과정을 거쳐 최종 임베딩 생성
+        features = self.forward_modules["preprocessing"](features)
+        features = self.forward_modules["preadapt_aggregator"](features)
+
+        if provide_patch_shapes:
+            return _detach(features), patch_shapes
+        return _detach(features)
 
     def fit(self, training_data):
         """PatchCore training.
@@ -269,6 +271,7 @@ class PatchCore(torch.nn.Module):
             features = np.asarray(features)
 
             patch_scores = image_scores = self.anomaly_scorer.predict([features])[0]
+            # print(f"patch_scores: {patch_scores.shape}") # [1568]
             image_scores = self.patch_maker.unpatch_scores(
                 image_scores, batchsize=batchsize
             )
@@ -278,7 +281,10 @@ class PatchCore(torch.nn.Module):
             patch_scores = self.patch_maker.unpatch_scores(
                 patch_scores, batchsize=batchsize
             )
-            scales = patch_shapes[0]
+            scales = patch_shapes[-1]
+            # print(f"scales: {scales}") # [28, 28]
+            
+            # cannot reshape array of size 392 into shape (2,28,28)
             patch_scores = patch_scores.reshape(batchsize, scales[0], scales[1])
 
             masks = self.anomaly_segmentor.convert_to_segmentation(patch_scores)
